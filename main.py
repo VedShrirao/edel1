@@ -1,0 +1,60 @@
+import pandas as pd
+import re
+from datetime import datetime, timedelta
+import pytz
+
+df = pd.read_csv("C:\\Users\\ved shrirao\\Desktop\\Book1.csv")
+column_name = 'Symbol'
+def separate_parts(string):
+    characters = re.search(r'[A-Za-z]+', string).group() if re.search(r'[A-Za-z]+', string) else ''
+    match = re.search(r'\d+.*\d+', string)
+    if match:
+        date_num = match.group()
+    else:
+        date_num = ''
+
+    date = re.search(r'\d{2}[A-Za-z]{3}', date_num).group() if re.search(r'\d{2}[A-Za-z]{3}', date_num) else ''
+    numeric_part = re.sub(date, '', date_num)
+
+    following_chars = re.sub(characters + date_num, '', string)
+
+    return characters, date, numeric_part, following_chars
+
+
+new_columns = ['Stock', 'Expiry Date', 'Strike price', 'Put/Call']
+new_df = pd.DataFrame(columns=new_columns)
+
+
+for cell in df[column_name]:
+    separated_parts = separate_parts(cell)
+    new_df.loc[len(new_df)] = separated_parts
+
+
+insert_index = df.columns.get_loc(column_name) + 1
+
+
+df = pd.concat([df.iloc[:, :insert_index], new_df, df.iloc[:, insert_index:]], axis=1)
+
+def calculate_time_to_maturity(expiry_date):
+    if pd.isna(expiry_date) or expiry_date.strip() == '':
+        return None  
+
+    expiry_time = datetime.strptime(expiry_date, '%d%b') 
+    current_time = datetime.now(pytz.timezone('Asia/Kolkata')) 
+    expiry_datetime = datetime(current_time.year, expiry_time.month, expiry_time.day, 15, 30, tzinfo=pytz.timezone('Asia/Kolkata'))
+    if current_time > expiry_datetime:
+        expiry_datetime += timedelta(days=365)  
+    time_to_maturity = expiry_datetime - current_time
+    return round(time_to_maturity.total_seconds() / 86400 )
+
+
+df['TTM'] = df['Expiry Date'].apply(calculate_time_to_maturity)
+
+df['TTM'] = df['TTM'].fillna(0)
+
+Put_df = df[df['Put/Call'] == 'PE']
+Call_df = df[df['Put/Call'] == 'CE']
+print("Put DataFrame:")
+print(Put_df)
+print("Call DataFrame:")
+print(Call_df)
